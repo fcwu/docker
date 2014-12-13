@@ -345,6 +345,20 @@ func getImagesHistory(eng *engine.Engine, version version.Version, w http.Respon
 	return nil
 }
 
+func getRemoteImageJson(eng *engine.Engine, version version.Version, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
+	if vars == nil {
+		return fmt.Errorf("Missing parameter")
+	}
+
+	var job = eng.Job("rimage", vars["name"])
+	streamJSON(job, w, false)
+
+	if err := job.Run(); err != nil {
+		return err
+	}
+	return nil
+}
+
 func getContainersChanges(eng *engine.Engine, version version.Version, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
 	if vars == nil {
 		return fmt.Errorf("Missing parameter")
@@ -1267,6 +1281,7 @@ func createRouter(eng *engine.Engine, logging, enableCors bool, dockerVersion st
 			"/images/get":                     getImagesGet,
 			"/images/{name:.*}/get":           getImagesGet,
 			"/images/{name:.*}/history":       getImagesHistory,
+			"/remote/images/{name:.*}/json":   getRemoteImageJson,
 			"/images/{name:.*}/json":          getImagesByName,
 			"/containers/ps":                  getContainersJSON,
 			"/containers/json":                getContainersJSON,
