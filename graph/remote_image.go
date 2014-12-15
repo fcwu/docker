@@ -17,16 +17,16 @@ func (s *TagStore) CmdRemoteImageJson(job *engine.Job) engine.Status {
 		localName   = job.Args[0]
 		authConfig  = &registry.AuthConfig{}
 		metaHeaders map[string][]string
-        imageTag string
+		imageTag    string
 	)
 
 	job.GetenvJson("authConfig", authConfig)
 	job.GetenvJson("metaHeaders", &metaHeaders)
 
-    if fields := strings.Split(localName, ":"); len(fields) >= 2 {
-        localName = fields[0]
-        imageTag = fields[1]
-    }
+	if fields := strings.Split(localName, ":"); len(fields) >= 2 {
+		localName = fields[0]
+		imageTag = fields[1]
+	}
 	hostname, remoteName, err := registry.ResolveRepositoryName(localName)
 	if err != nil {
 		return job.Error(err)
@@ -45,7 +45,7 @@ func (s *TagStore) CmdRemoteImageJson(job *engine.Job) engine.Status {
 	repoData, err := r.GetRepositoryData(remoteName)
 	if err != nil {
 		if strings.Contains(err.Error(), "HTTP code: 404") {
-			return job.Errorf("Error: image %s not found", remoteName)
+			return job.Errorf("No such image: %s", remoteName)
 		}
 		// Unexpected HTTP error
 		return job.Error(err)
@@ -57,36 +57,36 @@ func (s *TagStore) CmdRemoteImageJson(job *engine.Job) engine.Status {
 		return job.Error(err)
 	}
 
-    var imageId string
+	var imageId string
 	for tag, id := range tagsList {
-        if imageTag != "" && imageTag == tag {
-            imageId = id
-            break
-        }
-        if imageTag == "" {
-            imageId = id
-            if tag == "latest" {
-                break
-            }
-        }
+		if imageTag != "" && imageTag == tag {
+			imageId = id
+			break
+		}
+		if imageTag == "" {
+			imageId = id
+			if tag == "latest" {
+				break
+			}
+		}
 	}
-    if imageId == "" {
+	if imageId == "" {
 		return job.Errorf("no tag found")
-    }
+	}
 
-    for _, ep := range repoData.Endpoints {
-        var (
-            imgJSON []byte
-            err     error
-        )
+	for _, ep := range repoData.Endpoints {
+		var (
+			imgJSON []byte
+			err     error
+		)
 
-        imgJSON, _, err = r.GetRemoteImageJSON(imageId, ep, repoData.Tokens)
-        if err != nil {
-            return job.Error(err)
-        }
-        job.Stdout.Write(imgJSON)
-        break
-    }
+		imgJSON, _, err = r.GetRemoteImageJSON(imageId, ep, repoData.Tokens)
+		if err != nil {
+			return job.Error(err)
+		}
+		job.Stdout.Write(imgJSON)
+		break
+	}
 
 	return engine.StatusOK
 }
