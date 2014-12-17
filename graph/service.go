@@ -25,6 +25,7 @@ func (s *TagStore) Install(eng *engine.Engine) error {
 		"load":           s.CmdLoad,
 		"import":         s.CmdImport,
 		"pull":           s.CmdPull,
+		"pull2":          s.CmdPull2,
 		"push":           s.CmdPush,
 	} {
 		if err := eng.Register(name, handler); err != nil {

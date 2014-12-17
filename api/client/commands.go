@@ -1330,6 +1330,72 @@ func (cli *DockerCli) CmdPull(args ...string) error {
 	return nil
 }
 
+func (cli *DockerCli) CmdPull2(args ...string) error {
+	cmd := cli.Subcmd("pull2", "NAME[:TAG]", "Pull an image or a repository from the registry")
+	allTags := cmd.Bool([]string{"a", "-all-tags"}, false, "Download all tagged images in the repository")
+	if err := cmd.Parse(args); err != nil {
+		return nil
+	}
+
+	if cmd.NArg() != 1 {
+		cmd.Usage()
+		return nil
+	}
+	var (
+		v         = url.Values{}
+		remote    = cmd.Arg(0)
+		newRemote = remote
+	)
+	taglessRemote, tag := parsers.ParseRepositoryTag(remote)
+	if tag == "" && !*allTags {
+		newRemote = taglessRemote + ":" + graph.DEFAULTTAG
+	}
+	if tag != "" && *allTags {
+		return fmt.Errorf("tag can't be used with --all-tags/-a")
+	}
+
+	v.Set("fromImage", newRemote)
+
+	// Resolve the Repository name from fqn to hostname + name
+	hostname, _, err := registry.ResolveRepositoryName(taglessRemote)
+	if err != nil {
+		return err
+	}
+
+	cli.LoadConfigFile()
+
+	// Resolve the Auth config relevant for this server
+	authConfig := cli.configFile.ResolveAuthConfig(hostname)
+
+	pull2 := func(authConfig registry.AuthConfig) error {
+		buf, err := json.Marshal(authConfig)
+		if err != nil {
+			return err
+		}
+		registryAuthHeader := []string{
+			base64.URLEncoding.EncodeToString(buf),
+		}
+
+		return cli.stream("POST", "/images/create2?"+v.Encode(), nil, cli.out, map[string][]string{
+			"X-Registry-Auth": registryAuthHeader,
+		})
+	}
+
+	if err := pull2(authConfig); err != nil {
+		if strings.Contains(err.Error(), "Status 401") {
+			fmt.Fprintln(cli.out, "\nPlease login prior to pull:")
+			if err := cli.CmdLogin(hostname); err != nil {
+				return err
+			}
+			authConfig := cli.configFile.ResolveAuthConfig(hostname)
+			return pull2(authConfig)
+		}
+		return err
+	}
+
+	return nil
+}
+
 func (cli *DockerCli) CmdImages(args ...string) error {
 	cmd := cli.Subcmd("images", "[REPOSITORY]", "List images")
 	quiet := cmd.Bool([]string{"q", "-quiet"}, false, "Only show numeric IDs")
