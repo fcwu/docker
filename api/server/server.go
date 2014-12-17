@@ -590,6 +590,62 @@ func postImagesCreate(eng *engine.Engine, version version.Version, w http.Respon
 	return nil
 }
 
+// Creates an image from Pull or from Import
+func postImagesCreate2(eng *engine.Engine, version version.Version, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
+	if err := parseForm(r); err != nil {
+		return err
+	}
+
+	var (
+		image = r.Form.Get("fromImage")
+		tag   = r.Form.Get("tag")
+		job   *engine.Job
+	)
+	authEncoded := r.Header.Get("X-Registry-Auth")
+	authConfig := &registry.AuthConfig{}
+	if authEncoded != "" {
+		authJson := base64.NewDecoder(base64.URLEncoding, strings.NewReader(authEncoded))
+		if err := json.NewDecoder(authJson).Decode(authConfig); err != nil {
+			// for a pull it is not an error if no auth was given
+			// to increase compatibility with the existing api it is defaulting to be empty
+			authConfig = &registry.AuthConfig{}
+		}
+	}
+	if image != "" { //pull
+		if tag == "" {
+			image, tag = parsers.ParseRepositoryTag(image)
+		}
+		metaHeaders := map[string][]string{}
+		for k, v := range r.Header {
+			if strings.HasPrefix(k, "X-Meta-") {
+				metaHeaders[k] = v
+			}
+		}
+		job = eng.Job("pull2", image, tag)
+		job.SetenvBool("parallel", version.GreaterThan("1.3"))
+		job.SetenvJson("metaHeaders", metaHeaders)
+		job.SetenvJson("authConfig", authConfig)
+	} else { //import
+		return fmt.Errorf("Missing parameter")
+	}
+
+	if version.GreaterThan("1.0") {
+		job.SetenvBool("json", true)
+		streamJSON(job, w, true)
+	} else {
+		job.Stdout.Add(utils.NewWriteFlusher(w))
+	}
+	if err := job.Run(); err != nil {
+		if !job.Stdout.Used() {
+			return err
+		}
+		sf := utils.NewStreamFormatter(version.GreaterThan("1.0"))
+		w.Write(sf.FormatError(err))
+	}
+
+	return nil
+}
+
 func getImagesSearch(eng *engine.Engine, version version.Version, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
 	if err := parseForm(r); err != nil {
 		return err
@@ -1308,6 +1364,7 @@ func createRouter(eng *engine.Engine, logging, enableCors bool, dockerVersion st
 			"/commit":                       postCommit,
 			"/build":                        postBuild,
 			"/images/create":                postImagesCreate,
+			"/images/create2":               postImagesCreate2,
 			"/images/load":                  postImagesLoad,
 			"/images/{name:.*}/push":        postImagesPush,
 			"/images/{name:.*}/tag":         postImagesTag,
