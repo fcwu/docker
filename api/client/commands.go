@@ -1332,7 +1332,6 @@ func (cli *DockerCli) CmdPull(args ...string) error {
 
 func (cli *DockerCli) CmdPull2(args ...string) error {
 	cmd := cli.Subcmd("pull2", "NAME[:TAG]", "Pull an image or a repository from the registry")
-	allTags := cmd.Bool([]string{"a", "-all-tags"}, false, "Download all tagged images in the repository")
 	if err := cmd.Parse(args); err != nil {
 		return nil
 	}
@@ -1347,11 +1346,8 @@ func (cli *DockerCli) CmdPull2(args ...string) error {
 		newRemote = remote
 	)
 	taglessRemote, tag := parsers.ParseRepositoryTag(remote)
-	if tag == "" && !*allTags {
-		newRemote = taglessRemote + ":" + graph.DEFAULTTAG
-	}
-	if tag != "" && *allTags {
-		return fmt.Errorf("tag can't be used with --all-tags/-a")
+	if tag == "" {
+		return fmt.Errorf("tag is required!")
 	}
 
 	v.Set("fromImage", newRemote)
