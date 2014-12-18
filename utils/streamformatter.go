@@ -83,17 +83,20 @@ func (sf *StreamFormatter) FormatProgress2(status string, percent string) []byte
 	if sf.json {
 
 		b, err := json.Marshal(&JSONMessage{
-			// ProgressMessage: percent,
-			Status: status,
-			ID:     percent,
+			Status: percent,
+			// Status:          status,
+			// ProgressMessage: status,
 		})
 		if err != nil {
 			return nil
 		}
 		return b
 	}
-	endl := "\r\n"
-	return []byte(status + "" + percent + endl)
+	endl := "\r"
+	if percent == "" {
+		endl += "\n"
+	}
+	return []byte(status + " " + percent + endl)
 }
 
 func (sf *StreamFormatter) Json() bool {

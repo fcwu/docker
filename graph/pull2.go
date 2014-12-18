@@ -92,6 +92,9 @@ func (s *TagStore) CmdPull2(job *engine.Job) engine.Status {
 	if len(job.Args) > 1 {
 		tag = job.Args[1]
 	}
+	if tag == "" {
+		return job.Errorf("Usage: %s IMAGE [TAG]", job.Name)
+	}
 
 	job.GetenvJson("authConfig", authConfig)
 	job.GetenvJson("metaHeaders", &metaHeaders)
@@ -421,12 +424,15 @@ func (s *TagStore) pullImage2(r *registry.Session, out io.Writer, imgID, endpoin
 			}
 		}
 		numDownloaded += 1
-		percent = float32(numDownloaded) / float32(numLayers)
-		out.Write(sf.FormatProgress2(strconv.Itoa(numDownloaded)+"/"+strconv.Itoa(numLayers), "percent "+strconv.Itoa(int(percent*100))))
+		if numDownloaded == numLayers {
+			percent = 0.99
+		} else {
+			percent = float32(numDownloaded) / float32(numLayers)
+		}
+		proportion := strconv.Itoa(numDownloaded) + "/" + strconv.Itoa(numLayers)
+		strPercent := strconv.Itoa(int(percent*100)) + "%"
+		out.Write(sf.FormatProgress2(proportion, strPercent))
 		// out.Write(sf.FormatProgress(utils.TruncateID(id), "Download complete", nil))
-		// fmt.Printf("Downloaded count %d\n", numDownloaded)
-		// fmt.Printf("Downloaded percent %f\n", percent)
-		// fmt.Printf("Downloaded percent %d\n\n", int(percent*100))
 	}
 	return layers_downloaded, nil
 }
@@ -570,11 +576,14 @@ func (s *TagStore) pullV2Tag2(eng *engine.Engine, r *registry.Session, out io.Wr
 				di.downloaded = true
 			}
 			numDownloaded += 1
-			percent = float32(numDownloaded) / float32(numLayers)
-			out.Write(sf.FormatProgress2(strconv.Itoa(numDownloaded)+"/"+strconv.Itoa(numLayers), "percent "+strconv.Itoa(int(percent*100))))
-			// fmt.Printf("Downloaded count %d\n", numDownloaded)
-			// fmt.Printf("Downloaded percent %f\n", percent)
-			// fmt.Printf("Downloaded percent %d\n\n", int(percent*100))
+			if numDownloaded == numLayers {
+				percent = 0.99
+			} else {
+				percent = float32(numDownloaded) / float32(numLayers)
+			}
+			proportion := strconv.Itoa(numDownloaded) + "/" + strconv.Itoa(numLayers)
+			strPercent := strconv.Itoa(int(percent*100)) + "%"
+			out.Write(sf.FormatProgress2(proportion, strPercent))
 			di.imgJSON = imgJSON
 
 			return nil
