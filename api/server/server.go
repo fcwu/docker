@@ -1471,7 +1471,7 @@ func serveFd(addr string, job *engine.Job) error {
 }
 
 func lookupGidByName(nameOrGid string) (int, error) {
-	groupFile, err := user.GetGroupFile()
+	groupFile, err := user.GetGroupPath()
 	if err != nil {
 		return -1, err
 	}
