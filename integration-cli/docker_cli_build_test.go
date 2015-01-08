@@ -737,7 +737,7 @@ RUN mkdir /exists
 RUN touch /exists/exists_file
 RUN chown -R dockerio.dockerio /exists
 COPY test_file1 test_file2 /exists/
-ADD test_file3 test_file4 https://docker.com/robots.txt /exists/
+ADD test_file3 test_file4 https://dockerproject.com/robots.txt /exists/
 RUN [ $(ls -l / | grep exists | awk '{print $3":"$4}') = 'dockerio:dockerio' ]
 RUN [ $(ls -l /exists/test_file1 | awk '{print $3":"$4}') = 'root:root' ]
 RUN [ $(ls -l /exists/test_file2 | awk '{print $3":"$4}') = 'root:root' ]
@@ -3131,26 +3131,134 @@ func TestBuildDockerignoringDockerfile(t *testing.T) {
 	name := "testbuilddockerignoredockerfile"
 	defer deleteImages(name)
 	dockerfile := `
-        FROM scratch`
+        FROM busybox
+		ADD . /tmp/
+		RUN ! ls /tmp/Dockerfile
+		RUN ls /tmp/.dockerignore`
 	ctx, err := fakeContext(dockerfile, map[string]string{
-		"Dockerfile":    "FROM scratch",
+		"Dockerfile":    dockerfile,
 		".dockerignore": "Dockerfile\n",
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer ctx.Close()
-	if _, err = buildImageFromContext(name, ctx, true); err == nil {
-		t.Fatalf("Didn't get expected error from ignoring Dockerfile")
+	if _, err = buildImageFromContext(name, ctx, true); err != nil {
+		t.Fatalf("Didn't ignore Dockerfile correctly:%s", err)
 	}
 
 	// now try it with ./Dockerfile
 	ctx.Add(".dockerignore", "./Dockerfile\n")
-	if _, err = buildImageFromContext(name, ctx, true); err == nil {
-		t.Fatalf("Didn't get expected error from ignoring ./Dockerfile")
+	if _, err = buildImageFromContext(name, ctx, true); err != nil {
+		t.Fatalf("Didn't ignore ./Dockerfile correctly:%s", err)
 	}
 
 	logDone("build - test .dockerignore of Dockerfile")
+}
+
+func TestBuildDockerignoringRenamedDockerfile(t *testing.T) {
+	name := "testbuilddockerignoredockerfile"
+	defer deleteImages(name)
+	dockerfile := `
+        FROM busybox
+		ADD . /tmp/
+		RUN ls /tmp/Dockerfile
+		RUN ! ls /tmp/MyDockerfile
+		RUN ls /tmp/.dockerignore`
+	ctx, err := fakeContext(dockerfile, map[string]string{
+		"Dockerfile":    "Should not use me",
+		"MyDockerfile":  dockerfile,
+		".dockerignore": "MyDockerfile\n",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = buildImageFromContext(name, ctx, true); err != nil {
+		t.Fatalf("Didn't ignore MyDockerfile correctly:%s", err)
+	}
+
+	// now try it with ./MyDockerfile
+	ctx.Add(".dockerignore", "./MyDockerfile\n")
+	if _, err = buildImageFromContext(name, ctx, true); err != nil {
+		t.Fatalf("Didn't ignore ./MyDockerfile correctly:%s", err)
+	}
+
+	logDone("build - test .dockerignore of renamed Dockerfile")
+}
+
+func TestBuildDockerignoringDockerignore(t *testing.T) {
+	name := "testbuilddockerignoredockerignore"
+	defer deleteImages(name)
+	dockerfile := `
+        FROM busybox
+		ADD . /tmp/
+		RUN ! ls /tmp/.dockerignore
+		RUN ls /tmp/Dockerfile`
+	ctx, err := fakeContext(dockerfile, map[string]string{
+		"Dockerfile":    dockerfile,
+		".dockerignore": ".dockerignore\n",
+	})
+	defer ctx.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = buildImageFromContext(name, ctx, true); err != nil {
+		t.Fatalf("Didn't ignore .dockerignore correctly:%s", err)
+	}
+	logDone("build - test .dockerignore of .dockerignore")
+}
+
+func TestBuildDockerignoreTouchDockerfile(t *testing.T) {
+	var id1 string
+	var id2 string
+
+	name := "testbuilddockerignoretouchdockerfile"
+	defer deleteImages(name)
+	dockerfile := `
+        FROM busybox
+		ADD . /tmp/`
+	ctx, err := fakeContext(dockerfile, map[string]string{
+		"Dockerfile":    dockerfile,
+		".dockerignore": "Dockerfile\n",
+	})
+	defer ctx.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if id1, err = buildImageFromContext(name, ctx, true); err != nil {
+		t.Fatalf("Didn't build it correctly:%s", err)
+	}
+
+	if id2, err = buildImageFromContext(name, ctx, true); err != nil {
+		t.Fatalf("Didn't build it correctly:%s", err)
+	}
+	if id1 != id2 {
+		t.Fatalf("Didn't use the cache - 1")
+	}
+
+	// Now make sure touching Dockerfile doesn't invalidate the cache
+	if err = ctx.Add("Dockerfile", dockerfile+"\n# hi"); err != nil {
+		t.Fatalf("Didn't add Dockerfile: %s", err)
+	}
+	if id2, err = buildImageFromContext(name, ctx, true); err != nil {
+		t.Fatalf("Didn't build it correctly:%s", err)
+	}
+	if id1 != id2 {
+		t.Fatalf("Didn't use the cache - 2")
+	}
+
+	// One more time but just 'touch' it instead of changing the content
+	if err = ctx.Add("Dockerfile", dockerfile+"\n# hi"); err != nil {
+		t.Fatalf("Didn't add Dockerfile: %s", err)
+	}
+	if id2, err = buildImageFromContext(name, ctx, true); err != nil {
+		t.Fatalf("Didn't build it correctly:%s", err)
+	}
+	if id1 != id2 {
+		t.Fatalf("Didn't use the cache - 3")
+	}
+
+	logDone("build - test .dockerignore touch dockerfile")
 }
 
 func TestBuildDockerignoringWholeDir(t *testing.T) {
@@ -4091,4 +4199,105 @@ CMD cat /foo/file`,
 	}
 
 	logDone("build - volumes retain contents in build")
+}
+
+func TestBuildRenamedDockerfile(t *testing.T) {
+	defer deleteAllContainers()
+
+	ctx, err := fakeContext(`FROM busybox
+	RUN echo from Dockerfile`,
+		map[string]string{
+			"Dockerfile":       "FROM busybox\nRUN echo from Dockerfile",
+			"files/Dockerfile": "FROM busybox\nRUN echo from files/Dockerfile",
+			"files/dFile":      "FROM busybox\nRUN echo from files/dFile",
+			"dFile":            "FROM busybox\nRUN echo from dFile",
+		})
+	defer ctx.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	out, _, err := dockerCmdInDir(t, ctx.Dir, "build", "-t", "test1", ".")
+
+	if err != nil {
+		t.Fatalf("Failed to build: %s\n%s", out, err)
+	}
+	if !strings.Contains(out, "from Dockerfile") {
+		t.Fatalf("Should have used Dockerfile, output:%s", out)
+	}
+
+	out, _, err = dockerCmdInDir(t, ctx.Dir, "build", "-f", "files/Dockerfile", "-t", "test2", ".")
+
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "from files/Dockerfile") {
+		t.Fatalf("Should have used files/Dockerfile, output:%s", out)
+	}
+
+	out, _, err = dockerCmdInDir(t, ctx.Dir, "build", "--file=files/dFile", "-t", "test3", ".")
+
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "from files/dFile") {
+		t.Fatalf("Should have used files/dFile, output:%s", out)
+	}
+
+	out, _, err = dockerCmdInDir(t, ctx.Dir, "build", "--file=dFile", "-t", "test4", ".")
+
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "from dFile") {
+		t.Fatalf("Should have used dFile, output:%s", out)
+	}
+
+	out, _, err = dockerCmdInDir(t, ctx.Dir, "build", "--file=/etc/passwd", "-t", "test5", ".")
+
+	if err == nil {
+		t.Fatalf("Was supposed to fail to find passwd")
+	}
+
+	if !strings.Contains(out, "The Dockerfile (/etc/passwd) must be within the build context (.)") {
+		t.Fatalf("Wrong error message for passwd:%v", out)
+	}
+
+	out, _, err = dockerCmdInDir(t, ctx.Dir+"/files", "build", "-f", "../Dockerfile", "-t", "test5", "..")
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !strings.Contains(out, "from Dockerfile") {
+		t.Fatalf("Should have used root Dockerfile, output:%s", out)
+	}
+
+	out, _, err = dockerCmdInDir(t, ctx.Dir+"/files", "build", "-f", ctx.Dir+"/files/Dockerfile", "-t", "test6", "..")
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !strings.Contains(out, "from files/Dockerfile") {
+		t.Fatalf("Should have used files Dockerfile - 2, output:%s", out)
+	}
+
+	out, _, err = dockerCmdInDir(t, ctx.Dir+"/files", "build", "-f", "../Dockerfile", "-t", "test7", ".")
+
+	if err == nil || !strings.Contains(out, "must be within the build context") {
+		t.Fatalf("Should have failed with Dockerfile out of context")
+	}
+
+	out, _, err = dockerCmdInDir(t, "/tmp", "build", "-t", "test6", ctx.Dir)
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !strings.Contains(out, "from Dockerfile") {
+		t.Fatalf("Should have used root Dockerfile, output:%s", out)
+	}
+
+	logDone("build - rename dockerfile")
 }

@@ -154,6 +154,12 @@ Exclusion patterns match files or directories relative to the source repository
 that will be excluded from the context. Globbing is done using Go's
 [filepath.Match](http://golang.org/pkg/path/filepath#Match) rules.
 
+> **Note**:
+> The `.dockerignore` file can even be used to ignore the `Dockerfile` and
+> `.dockerignore` files. This might be useful if you are copying files from
+> the root of the build context into your new containter but do not want to 
+> include the `Dockerfile` or `.dockerignore` files (e.g. `ADD . /someDir/`).
+
 The following example shows the use of the `.dockerignore` file to exclude the
 `.git` directory from the context. Its effect can be seen in the changed size of
 the uploaded context.
@@ -343,7 +349,8 @@ accessible from the host by default. To expose ports to the host, at runtime,
     ENV <key>=<value> ...
 
 The `ENV` instruction sets the environment variable `<key>` to the value
-`<value>`. This value will be passed to all future `RUN` instructions. This is
+`<value>`. This value will be passed to all future 
+`RUN`, `ENTRYPOINT`, and `CMD` instructions. This is
 functionally equivalent to prefixing the command with `<key>=<value>`
 
 The `ENV` instruction has two forms. The first form, `ENV <key> <value>`,
