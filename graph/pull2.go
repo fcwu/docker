@@ -430,7 +430,7 @@ func (s *TagStore) pullImage2(r *registry.Session, out io.Writer, imgID, endpoin
 			percent = float32(numDownloaded) / float32(numLayers)
 		}
 		proportion := strconv.Itoa(numDownloaded) + "/" + strconv.Itoa(numLayers)
-		strPercent := strconv.Itoa(int(percent*100)) + "%"
+		strPercent := "Percent:" + strconv.Itoa(int(percent*100)) + "%"
 		out.Write(sf.FormatProgress2(proportion, strPercent))
 		// out.Write(sf.FormatProgress(utils.TruncateID(id), "Download complete", nil))
 	}
@@ -582,7 +582,7 @@ func (s *TagStore) pullV2Tag2(eng *engine.Engine, r *registry.Session, out io.Wr
 				percent = float32(numDownloaded) / float32(numLayers)
 			}
 			proportion := strconv.Itoa(numDownloaded) + "/" + strconv.Itoa(numLayers)
-			strPercent := strconv.Itoa(int(percent*100)) + "%"
+			strPercent := "Percent:" + strconv.Itoa(int(percent*100)) + "%"
 			out.Write(sf.FormatProgress2(proportion, strPercent))
 			di.imgJSON = imgJSON
 
