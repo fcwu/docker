@@ -1286,7 +1286,7 @@ func (cli *DockerCli) CmdPull(args ...string) error {
 }
 
 func (cli *DockerCli) CmdPull2(args ...string) error {
-	cmd := cli.Subcmd("pull2", "NAME[:TAG]", "Pull an image or a repository from the registry")
+	cmd := cli.Subcmd("pull2", "NAME[:TAG]", "Pull an image or a repository from the registry", true)
 	if err := cmd.Parse(args); err != nil {
 		return nil
 	}
